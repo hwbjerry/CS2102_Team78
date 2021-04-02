@@ -44,19 +44,19 @@ CREATE TABLE Course_packages (
 	sale_start_date DATE NOT NULL,
 	sale_end_date DATE NOT NULL,
 	num_free_registrations INTEGER,
-	name TEXT NOT NULL,
+	name VARCHAR(100) NOT NULL,
 	price DECIMAL NOT NULL
 );
 
 CREATE TABLE Sessions (
 	sid INTEGER,
-start_time DATETIME,
+	start_time DATETIME,
 	end_time DATETIME,
 	date DATE,
 	launch_date DATE NOT NULL,
 	course_id INTEGER NOT NULL,
 	rid INTEGER NOT NULL,
-primary key (sid, launch_date, course_id, rid),
+	primary key (sid, launch_date, course_id, rid),
 	foreign key (rid) REFERENCES Rooms,
 	foreign key (launch_date) DATE REFERENCES Offerings on delete cascade,
 	foreign key (course_id) REFERENCES Courses on delete cascade
@@ -65,9 +65,9 @@ primary key (sid, launch_date, course_id, rid),
 -- integrate with Handles lecture ER page 44
 CREATE TABLE Offerings (
 	launch_date DATE NOT NULL,
-course_id INTEGER NOT NULL,
-eid INTEGER NOT NULL,
-end_date DATE,
+	course_id INTEGER NOT NULL,
+	eid INTEGER NOT NULL,
+	end_date DATE,
 	start_date DATE,
 	registration_deadline TIMESTAMP,
 	target_number_registrations INTEGER,
@@ -80,9 +80,9 @@ end_date DATE,
 	
 CREATE TABLE Courses (
 	course_id INTEGER PRIMARY KEY,
-	title TEXT NOT NULL,
+	title VARCHAR(50) NOT NULL,
 	duration INTEGER NOT NULL,
-	description TEXT,
+	description VARCHAR(250),
 	name VARCHAR(50) NOT NULL,
 	foreign key (name) REFERENCES Course_areas
 );
@@ -101,34 +101,34 @@ CREATE TABLE Owns (
 );
 
 CREATE TABLE Registers ( 
-date DATE,
-sid INTEGER references Sessions,
-number INTEGER,
-cust_id INTEGER,
-primary key (date, sid, number, cust_id),
-foreign key (number, cust_id) references Owns (number, cust_id)
+	date DATE,
+	sid INTEGER references Sessions,
+	number INTEGER,
+	cust_id INTEGER,
+	primary key (date, sid, number, cust_id),
+	foreign key (number, cust_id) references Owns (number, cust_id)
 );
 
 CREATE TABLE Buys (
-date DATE,
-num_remaining_redemptions INTEGER,
-package_id INTEGER REFERENCES Course_packages,
-number INTEGER,
-cust_id INTEGER,
-PRIMARY KEY (date, package_id, number, cust_id),
-foreign key (number, cust_id) references Owns (number, cust_id)
+	date DATE,
+	num_remaining_redemptions INTEGER,
+	package_id INTEGER REFERENCES Course_packages,
+	number INTEGER,
+	cust_id INTEGER,
+	PRIMARY KEY (date, package_id, number, cust_id),
+	foreign key (number, cust_id) references Owns (number, cust_id)
 );
 
 CREATE TABLE Redeems (
 	date DATE PRIMARY KEY,
 	buys_date DATE,
 	package_id INTEGER,
-sid INTEGER,
+	sid INTEGER,
 	launch_date DATE,
-course_id INTEGER,
-foreign key (buys_date, package_id, number, cust_id) REFERENCES Buys, 
-foreign key (sid, launch_date, course_id) REFERENCES Sessions,
-primary key (date, buys_date, package_id, sid, launch_date, course_id)
+	course_id INTEGER,
+	foreign key (buys_date, package_id, number, cust_id) REFERENCES Buys, 
+	foreign key (sid, launch_date, course_id) REFERENCES Sessions,
+	primary key (date, buys_date, package_id, sid, launch_date, course_id)
 );
 
 CREATE TABLE Cancels (
@@ -139,10 +139,10 @@ CREATE TABLE Cancels (
 	course_id INTEGER NOT NULL,
 	refund_amt numeric,
 	package_credit integer
-check(package_credit >= 0),
+	check(package_credit >= 0),
 	foreign key (sid, launch_date, course_id) REFERENCES Sessions,
 	foreign key (cust_id) REFERENCES Customers,
-primary key (date, cust_id, sid, launch_dae, course_id)
+	primary key (date, cust_id, sid, launch_dae, course_id)
 );
 
 CREATE TABLE Conducts (
@@ -152,23 +152,23 @@ CREATE TABLE Conducts (
 	launch_date DATE NOT NULL,
 	course_id INTEGER NOT NULL,
 	foreign key (eid)  INTEGER REFERENCES Employees,
-foreign key (sid, rid, launch_date, course_id) REFERENCES Sessions,
-primary key (course_id, launch_date, sid) 
+	foreign key (sid, rid, launch_date, course_id) REFERENCES Sessions,
+	primary key (course_id, launch_date, sid) 
 );
 
 
 CREATE TABLE Specializes (
 	eid INTEGER references Instructors, 
 	name VARCHAR(50) references Course_areas,
-primary key(eid, name)
+	primary key(eid, name)
 ); 
 
 
 -- Integrate with Manages lecture ER page 44
 CREATE TABLE Course_areas ( 
 	name VARCHAR(50) primary key,
-eid INTEGER NOT NULL,
-foreign key(eid) references Managers 
+	eid INTEGER NOT NULL,
+	foreign key(eid) references Managers 
 );
 
 
