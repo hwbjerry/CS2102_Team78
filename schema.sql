@@ -26,10 +26,11 @@ DROP TABLE IF EXISTS Administrators CASCADE;
 
 CREATE TABLE Customers (
 	cust_id  INTEGER PRIMARY KEY,
-	address TEXT,
-	phone nvarchar,
-	name  TEXT NOT NULL,
-	email TEXT
+	address VARCHAR(250),
+	phone VARCHAR(15),
+	name VARCHAR(100),
+	email VARCHAR(100),
+  	UNIQUE (address, phone, name, email)
 );
 
 CREATE TABLE Credit_cards ( 
