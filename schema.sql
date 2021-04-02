@@ -58,7 +58,7 @@ CREATE TABLE Sessions (
 	rid INTEGER NOT NULL,
 	primary key (sid, launch_date, course_id, rid),
 	foreign key (rid) REFERENCES Rooms,
-	foreign key (launch_date) DATE REFERENCES Offerings on delete cascade,
+	foreign key (launch_date) REFERENCES Offerings on delete cascade,
 	foreign key (course_id) REFERENCES Courses on delete cascade
 );
 
