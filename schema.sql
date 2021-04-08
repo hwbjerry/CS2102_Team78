@@ -5,7 +5,7 @@ DROP TABLE IF EXISTS Sessions CASCADE;
 DROP TABLE IF EXISTS Offerings CASCADE;
 DROP TABLE IF EXISTS Courses CASCADE;
 DROP TABLE IF EXISTS Rooms CASCADE;
-DROP TABLE IF EXISTS Owns CASCADE;
+--DROP TABLE IF EXISTS Owns CASCADE;
 DROP TABLE IF EXISTS Registers CASCADE;
 DROP TABLE IF EXISTS Buys CASCADE;
 DROP TABLE IF EXISTS Redeems CASCADE;
@@ -31,20 +31,26 @@ CREATE TABLE Customers (
   	UNIQUE (address, phone, cust_name, email)
 );
 
+-- Integrate with owns for total participation
 CREATE TABLE Credit_cards ( 
-	credit_card_number TEXT PRIMARY KEY,
+	credit_card_number TEXT,
 	CVV INTEGER NOT NULL, 
-	expiry_date DATE NOT NULL
+	expiry_date DATE NOT NULL,
+from_date DATE NOT NULL,
+  	cust_id INTEGER NOT NULL,
+	foreign key (cust_id) REFERENCES Customers(cust_id),
+	primary key (credit_card_number),
+	UNIQUE(credit_card_number, cust_id)
 );
 
-CREATE TABLE Owns (
-	from_date DATE NOT NULL,
-  	cust_id INTEGER NOT NULL,
-  	credit_card_number TEXT,
-	foreign key (cust_id) REFERENCES Customers(cust_id),
-	foreign key (credit_card_number) REFERENCES Credit_cards(credit_card_number),
-	primary key (credit_card_number, cust_id)
-);
+-- CREATE TABLE Owns (
+-- 	from_date DATE NOT NULL,
+--   	cust_id INTEGER NOT NULL,
+--   	credit_card_number TEXT,
+-- 	foreign key (cust_id) REFERENCES Customers(cust_id),
+-- 	foreign key (credit_card_number) REFERENCES Credit_cards(credit_card_number),
+-- 	primary key (credit_card_number, cust_id)
+-- );
 
 CREATE TABLE Course_packages (
 	package_id SERIAL PRIMARY KEY,
@@ -191,7 +197,7 @@ CREATE TABLE Registers (
 	rid INTEGER NOT NULL,
 	primary key (registers_date, sid, credit_card_number, cust_id),
 	foreign key (sid, launch_date, course_id, rid) references Sessions (sid, launch_date, course_id, rid),
-	foreign key (credit_card_number, cust_id) references Owns(credit_card_number, cust_id)
+	foreign key (credit_card_number, cust_id) references Credit_cards(credit_card_number, cust_id)
 );
 
 CREATE TABLE Buys (
@@ -201,7 +207,7 @@ CREATE TABLE Buys (
 	credit_card_number TEXT,
 	cust_id INTEGER,
 	PRIMARY KEY (buys_date, credit_card_number, package_id, cust_id),
-	foreign key (credit_card_number, cust_id) references Owns(credit_card_number, cust_id),
+	foreign key (credit_card_number, cust_id) references Credit_cards(credit_card_number, cust_id),
   	foreign key (package_id) REFERENCES Course_packages(package_id),
 	CHECK (
 		num_remaining_redemptions >= 0
@@ -210,14 +216,15 @@ CREATE TABLE Buys (
 
 
 CREATE TABLE Redeems (
-	redeems_date DATE DEFAULT CURRENT_DATE,	
+	redeems_date DATE DEFAULT CURRENT_DATE,
+	
 	sid INTEGER,
 	launch_date DATE,
 	course_id INTEGER,
 	rid INTEGER NOT NULL,
-	buys_date DATE,
-	package_id INTEGER,
-	credit_card_number TEXT,
+buys_date DATE,
+package_id INTEGER,
+credit_card_number TEXT,
 	cust_id INTEGER,
 	foreign key (buys_date, credit_card_number, package_id, cust_id) REFERENCES Buys(buys_date, credit_card_number, package_id, cust_id), 
 	foreign key (sid, launch_date, course_id, rid) REFERENCES Sessions(sid, launch_date, course_id, rid),
@@ -230,11 +237,11 @@ CREATE TABLE Redeems (
 CREATE TABLE Cancels (
 	cancels_date DATE DEFAULT CURRENT_DATE,
 	cust_id INTEGER NOT NULL,
-	sid INTEGER NOT NULL,	
+sid INTEGER NOT NULL,	
 	launch_date DATE NOT NULL,
 	course_id INTEGER NOT NULL,
 	rid INTEGER,
-	refund_amt NUMERIC,
+refund_amt NUMERIC,
 	package_credit INTEGER,
 	check(package_credit >= 0),
 	foreign key (sid, launch_date, course_id, rid) REFERENCES Sessions(sid, launch_date, course_id, rid),
@@ -264,12 +271,13 @@ CREATE TABLE Pay_slips (
 );
 
 -- Triggers
+
 -- Customer must have a credit to be able to purchase the packages 
 CREATE OR REPLACE FUNCTION check_own_credit_card() 
 RETURNS TRIGGER 
 AS $$
 	BEGIN 
-		IF ((SELECT COUNT(credit_card_number) FROM Owns WHERE cust_id = NEW.cust_id) = 0) 
+		IF ((SELECT COUNT(credit_card_number) FROM Credit_cards WHERE cust_id = NEW.cust_id) = 0) 
 THEN RAISE EXCEPTION 'Each customer is required to own at least one credit credit';
 			RETURN NULL;
 		END IF;
@@ -376,6 +384,7 @@ CREATE CONSTRAINT TRIGGER check_part_time_full_time_trigger
 AFTER INSERT ON Employees
 FOR EACH ROW EXECUTE FUNCTION check_part_time_full_time_func();
 
+-- checks if instructor assigned is specialized in course area and if still works for the company
 CREATE OR REPLACE FUNCTION check_session_instructor_func() RETURNS TRIGGER
 AS $$
 DECLARE
@@ -404,6 +413,10 @@ AFTER INSERT OR UPDATE ON Sessions
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION check_session_instructor_func();
 
+
+
+
+
 -- Ensures that each instructor should specialize in at least one area
 CREATE OR REPLACE FUNCTION check_instructor_specialize() RETURNS TRIGGER
 AS $$
@@ -416,7 +429,7 @@ AS $$
 	END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER check_instructor_specialization 
+CREATE TRIGGER check_instructor_specializtion 
 AFTER INSERT ON Specializes
 FOR EACH ROW EXECUTE FUNCTION check_instructor_specialize();
 
@@ -425,12 +438,12 @@ AS $$
 	DECLARE
 		weekly_hours_worked FLOAT;
 	BEGIN
-		weekly_hours_worked := EXTRACT(EPOCH FROM (
+		weekly_hours_worked := EXTRACT(EPOCH FROM(
 			SELECT sum(Sessions.end_time - Sessions.start_time) 
 			FROM Sessions
 			WHERE date_part('month', Sessions.session_date) = date_part('month', NEW.session_date)
 			AND Sessions.conduct_by = NEW.conduct_by
-			)/60);
+			))/60;
 		IF EXISTS (
 			SELECT 1 
 			FROM Part_Time_Instructors 
@@ -514,7 +527,6 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER check_cancellation_policy_trigger
 AFTER INSERT OR UPDATE ON Cancels	
 FOR EACH ROW EXECUTE FUNCTION check_cancellation_policy_func();
-
 -- Prevent deletion of an offering that has session
 CREATE OR REPLACE FUNCTION check_offering_is_assigned_func()
 RETURNS TRIGGER AS $$
@@ -531,4 +543,3 @@ CREATE CONSTRAINT TRIGGER check_offering_is_assigned_trigger
 AFTER DELETE ON Offerings
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION check_offering_is_assigned_func();
-
