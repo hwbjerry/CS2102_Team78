@@ -1,3 +1,74 @@
+--30. view_manager_report:
+--30
+DROP FUNCTION IF EXISTS view_manager_report();
+CREATE OR REPLACE FUNCTION view_manager_report ()
+RETURNS TABLE (manager_name TEXT, total_course_areas INTEGER, total_course_offerings INTEGER, total_registration_fees NUMERIC, highest_fees_course_titles text[]) AS $$
+DECLARE
+    curs CURSOR FOR (SELECT eid, ename FROM Managers natural join Employees ORDER BY ename ASC);
+    r RECORD;
+    second_r RECORD;
+    curr_year INTEGER;
+    total_areas_of_courses_curr INTEGER;
+    total_course_offered_curr INTEGER;
+    total_net_registration_curr_fees NUMERIC;
+    total_fees_curr_card NUMERIC;
+    max_curr_fees NUMERIC;
+    redemption_curr_fees NUMERIC;
+    cur_highest_fees_course_titles text[];
+BEGIN
+    curr_year := EXTRACT(YEAR from CURRENT_DATE);
+    cur_highest_fees_course_titles := '{}';
+ 
+  OPEN curs;
+  LOOP
+      FETCH curs INTO r;
+      EXIT WHEN NOT FOUND;
+ 
+      SELECT COUNT(*) into total_areas_of_courses_curr
+      FROM Course_areas
+      WHERE eid = r.eid;
+ 
+      SELECT COUNT(*) into total_course_offered_curr
+      FROM Courses C natural join Course_areas CA natural join Offerings CO
+      WHERE eid = r.eid and (EXTRACT(YEAR from CO.end_date) = curr_year);
+ 
+   -- total registration fees paid for the course offering via credit card payment
+   -- this registration fees is given by the price of the course package divided by the number of sessions included in the course package (rounded down to the nearest dollar)
+ 
+      SELECT SUM(fees) into total_fees_curr_card
+      FROM (Courses C natural join Course_areas CA natural join Offerings CO) inner join Registers R1 on R1.course_id = CO.course_id and R1.launch_date = CO.launch_date
+      WHERE eid = r.eid and (EXTRACT(YEAR from CO.end_date) = curr_year);
+
+      SELECT MAX(fees) into max_curr_fees
+      FROM Courses C natural join Course_areas CA natural join Offerings CO
+      WHERE eid = r.eid and (EXTRACT(YEAR from CO.end_date) = curr_year);
+ 
+      SELECT SUM(price/num_free_registrations::int) into redemption_curr_fees
+      FROM (Courses C natural join Course_areas CA natural join Offerings CO) inner join Redeems Red on Red.course_id = CO.course_id and Red.launch_date = CO.launch_date inner join Course_packages CP on Red.package_id = CP.package_id
+      WHERE eid = r.eid and (EXTRACT(YEAR from CO.end_date) = curr_year);
+    
+      FOR r2 IN (
+        SELECT title
+        FROM Courses C natural join Course_areas CA natural join Offerings CO
+        WHERE eid = r.eid and (EXTRACT(YEAR from CO.end_date) = curr_year) and CO.fees = max_curr_fees
+      )
+      LOOP
+          cur_highest_fees_course_titles := array_append(cur_highest_fees_course_titles, r2.title);
+      END LOOP;
+      manager_name := r.ename;
+      cur_highest_fees_course_titles := '{}';
+      total_registration_fees := total_fees_curr_card + redemption_curr_fees;
+      total_course_areas := total_areas_of_courses_curr;
+      total_course_offerings := total_course_offered_curr;
+      highest_fees_course_titles := cur_highest_fees_course_titles;
+  END LOOP;
+  CLOSE curs;
+END;
+$$ LANGUAGE PLPGSQL;
+	     
+	       
+	       
+	       
 --23
 --This routine is used to remove a course session. The inputs to the routine include the following: course offering identifier and session number.
 --If the course session has not yet started and the request is valid, the routine will process the request with the necessary updates.
