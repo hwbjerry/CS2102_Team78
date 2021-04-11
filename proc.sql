@@ -1,4 +1,5 @@
---23
+
+--Functionality 23
 --This routine is used to remove a course session. The inputs to the routine include the following: course offering identifier and session number.
 --If the course session has not yet started and the request is valid, the routine will process the request with the necessary updates.
 --The request must not be performed if there is at least one registration for the session.
@@ -508,6 +509,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+
+
 -- Functionality 21
 -- Assumption Functionality 6 is correct
 DROP PROCEDURE IF EXISTS update_instructor(cid INT, session_number INT, instructor_id INT);
@@ -764,6 +767,7 @@ BEGIN
 
 END
 $$ LANGUAGE plpgsql;
+
 
 -- EXAMPLE:
 -- select * from promote_courses();
