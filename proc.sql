@@ -779,3 +779,258 @@ $$ LANGUAGE plpgsql;
 -- 	BEGIN
 -- 	END
 -- $$ LANGUAGE plpgsql;
+
+--2
+CREATE OR REPLACE PROCEDURE remove_employee (remove_eid INTEGER, departure_date DATE) 
+AS $$
+BEGIN
+	IF EXISTS (
+SELECT 1 FROM Offerings WHERE eid = remove_eid AND
+registration_deadline > departure_date)
+	THEN RAISE EXCEPTION  'Update operation is rejected: registration deadline of some course offering is after this administrator’s departure date';
+	ELSEIF EXISTS (
+SELECT 1 FROM Sessions WHERE conduct_by = remove_eid AND
+session_date = departure_date)
+	THEN RAISE EXCEPTION  'Update operation is rejected: some course session taught by this instructor starts after his/her departure date';
+	ELSEIF EXISTS (
+SELECT 1 FROM Course_areas WHERE eid = remove_eid)
+	THEN RAISE EXCEPTION  'Update operation is rejected: some course area is managed by this manager';
+	END IF;
+	UPDATE EMPLOYEES
+set depart_date = departure_date
+	WHERE eid  = remove_eid;
+END;
+$$ LANGUAGE plpgsql;
+
+
+--4
+CREATE OR REPLACE PROCEDURE update_credit_card (customer_id INTEGER, new_number TEXT, new_CVV INTEGER, new_expiry_date DATE)
+AS $$
+BEGIN
+	INSERT INTO Credit_cards VALUES (new_number, new_cvv, new_expiry_date, current_date, customer_id);
+END;
+$$ LANGUAGE plpgsql;
+
+
+--17
+CREATE OR REPLACE PROCEDURE register_session(custId INT, courseId INT, launchDate DATE, sessionNumber INT, paymentMethod INT)
+AS $$
+DECLARE
+packageId INT;
+cardNumber TEXT;
+buyDate DATE;
+
+BEGIN
+IF NOT EXISTS (SELECT 1 FROM Customers WHERE Customers.cust_id = custId) THEN
+RAISE EXCEPTION 'Customer ID % is not valid', custId;
+END IF;
+IF NOT EXISTS (SELECT 1 FROM Sessions WHERE course_id = courseId AND launch_date = launchDate AND sid = sessionNumber) THEN
+RAISE EXCEPTION 'The session % of course offering of % launched on % is invalid', sessionNumber, courseId, launchDate;
+END IF;
+IF paymentMethod != 0 AND paymentMethod != 1 THEN
+RAISE EXCEPTION 'Payment method must be either INTEGER 0 or 1, which represent using credit card or redemption from active package respectively';
+END IF;
+
+IF paymentMethod = 1 THEN
+    SELECT B.package_id, B.credit_card_number, B.buys_date INTO packageId, cardNumber, buyDate
+    FROM Buys B
+    WHERE EXISTS (SELECT 1 FROM Credit_cards C WHERE C.cust_id = custId AND C.credit_card_number = B.credit_card_number)
+    AND B.num_remaining_redemptions >= 1
+    ORDER BY B.num_remaining_redemptions LIMIT 1;
+    IF packageId ISNULL THEN
+      RAISE EXCEPTION 'Customer % has no active package', custId;
+    END IF;
+    INSERT INTO Redeems VALUES(CURRENT_DATE, sessionNumber, launchDate, courseId, sessionNumber, buyDate, packageId, cardNumber, custId);
+    RAISE NOTICE 'The session successfully redeemed with package %', packageId;
+ELSE
+    SELECT C.credit_card_number INTO cardNumber
+    FROM Credit_cards C
+    WHERE C.cust_id = custId AND C.expiry_date >= CURRENT_DATE
+    ORDER BY C.from_date DESC
+    LIMIT 1;
+    INSERT INTO Registers VALUES(CURRENT_DATE, sessionNumber, launchDate, cardNumber, custId, courseId, sessionNumber);
+    RAISE NOTICE 'The session successfully bought by customer %', custId;
+END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+
+--20
+DROP PROCEDURE cancel_registration(integer,integer,date);
+CREATE OR REPLACE PROCEDURE cancel_registration (customer_id INTEGER, cid INTEGER, launchDate DATE)
+AS $$
+DECLARE
+  -- check if redeem or refund
+  refund CURSOR FOR (select * from Registers natural join Sessions natural join Offerings);
+  r1 record;
+  redeem CURSOR FOR (select * from Redeems natural join Sessions);
+  r2 record;
+
+BEGIN
+  open refund;
+  LOOP
+    fetch refund into r1;
+    exit when not found;
+    --in the case of credit card payment
+    if (r1.cust_id = customer_id AND r1.course_id = cid AND r1.launch_date = launchDate)
+    then
+      if (current_date + '7 day'::interval <= r1.session_date)
+        then  
+          insert into Cancels values (current_date,  r1.cust_id, r1.sid,  r1.launch_date, r1.course_id, r1.rid, (0.9*r1.fees), NULL);
+	delete from Registers where (r1.cust_id = customer_id AND r1.course_id = cid AND r1.launch_date = launchDate);
+        else
+          raise exception 'No refund for late cancellation';
+      end if;
+    end if;
+  end loop;
+  close refund;
+
+  open redeem;
+  LOOP 
+    fetch redeem into r2;
+    exit when not found;
+    --in the case of redemption
+    if (r2.cust_id = customer_id AND r2.course_id = cid AND r2.launch_date = launchDate)
+    then
+      if (current_date + '7 day'::interval <= r2.session_date)
+        then 
+          insert into Cancels values (current_date, r2.cust_id,  r2.sid, r2.launch_date, r2.course_id, r2.rid, NULL, 1);
+	delete from Redeems where (r2.cust_id = customer_id AND r2.course_id = cid AND r2.launch_date = launchDate);
+          update Buys
+          set num_remaining_redemptions = num_remaining_redemptions + 1
+          where cust_id = customer_id;
+        else  
+          raise exception 'Unable to credit due to late cancellation';
+      end if;
+    end if;
+  end loop;
+  close redeem;
+
+END;
+$$ LANGUAGE plpgsql;
+	       
+	       
+--28
+CREATE OR REPLACE FUNCTION popular_courses()
+RETURNS TABLE (course_id INT, course_title TEXT, course_area TEXT, num_offerings INT, num_latest_registrations INT) AS $$
+DECLARE
+    curs CURSOR FOR (
+        WITH W AS (
+            SELECT C.course_id, C.title, C.area_name, O.launch_date
+            FROM Courses C LEFT OUTER JOIN Offerings O on C.course_id = O.course_id
+            WHERE EXTRACT(YEAR FROM O.start_date) = EXTRACT(YEAR FROM CURRENT_DATE)
+            AND (
+				SELECT count(O1.launch_date) > 2
+				FROM Offerings O1
+				WHERE C.course_id = O1.course_id
+			)
+        ),
+        X AS (
+            SELECT R.course_id, R.launch_date, count(*) AS registers_count
+            FROM Registers R
+            GROUP BY R.course_id, R.launch_date
+        ),
+        Y AS (
+            SELECT R1.course_id, R1.launch_date, count(*) AS redeems_count
+            FROM Redeems R1
+            GROUP BY R1.course_id, R1.launch_date
+        ),
+        Z AS (
+            SELECT C1.course_id, C1.launch_date, count(*) AS cancels_count
+            FROM Cancels C1
+            GROUP BY C1.course_id, C1.launch_date
+        )
+        SELECT W.course_id, W.title, W.area_name, W.launch_date, COALESCE(X.registers_count, 0) + COALESCE(Y.redeems_count, 0) - COALESCE(Z.cancels_count, 0) AS num_registerations
+        FROM W LEFT OUTER JOIN X ON (W.course_id = X.course_id AND W.launch_date = X.launch_date)
+                LEFT OUTER JOIN Y ON (W.course_id = Y.course_id AND W.launch_date = Y.launch_date)
+                LEFT OUTER JOIN Z ON (W.course_id = Z.course_id AND W.launch_date = Z.launch_date)
+        ORDER BY W.course_id, W.launch_date
+    );
+    curr_r RECORD;
+    prev_r RECORD;
+    num INT := 1;
+    is_popular INT := 1;
+BEGIN
+    OPEN curs;
+    FETCH curs INTO prev_r;
+    LOOP
+        FETCH curs INTO curr_r;
+        EXIT WHEN NOT FOUND;
+        IF prev_r.course_id = curr_r.course_id AND prev_r.num_registerations >= curr_r.num_registerations
+        THEN
+            is_popular := 0;
+        ELSIF prev_r.course_id <> curr_r.course_id AND is_popular = 1
+        THEN
+            course_id := prev_r.course_id;
+            course_title := prev_r.title;
+            course_area := prev_r.area_name;
+            num_offerings := num;
+            num_latest_registrations := prev_r.num_registerations;
+            RETURN NEXT;
+            num := 1;
+        ELSIF prev_r.course_id <> curr_r.course_id AND is_popular = 0
+        THEN
+            is_popular := 1;
+            num := 1;
+        ELSE
+            num := num + 1;
+        END IF;
+        prev_r := curr_r;
+    END LOOP;
+	IF is_popular = 1
+	THEN
+		course_id := prev_r.course_id;
+        course_title := prev_r.title;
+        course_area := prev_r.area_name;
+        num_offerings := num;
+        num_latest_registrations := prev_r.num_registerations;
+        RETURN NEXT;
+	END IF;
+    CLOSE curs;
+END;
+$$ LANGUAGE plpgsql;
+
+
+--29
+CREATE OR REPLACE FUNCTION view_summary_report(n integer)
+RETURNS TABLE(
+    month_and_year varchar(50),
+    total_salary double precision,
+    total_packages_sold integer,
+    total_paid_fee double precision,
+    total_refund double precision,
+    total_redeemed_course integer
+    ) AS $$
+    DECLARE
+        iter_date date;
+    BEGIN
+        iter_date = CURRENT_DATE;
+        for counter in 1..n
+        LOOP
+            month_and_year:= to_char(iter_date, 'YYYY-MM');
+            total_salary:= coalesce((SELECT sum(amount) FROM Pay_slips WHERE date_trunc('month', payment_date) = date_trunc('month', iter_date) GROUP BY date_trunc('month', payment_date)), 0);
+            total_packages_sold:= coalesce((SELECT count(*) FROM Buys WHERE date_trunc('month', buys_date) = date_trunc('month', iter_date) GROUP BY date_trunc('month', buys_date)), 0);
+            total_paid_fee:= coalesce((SELECT sum(fees) FROM (registers R NATURAL JOIN sessions S) INNER JOIN Offerings O ON (S.course_id, S.launch_date) = (O.course_id, O.launch_date)
+                            WHERE date_trunc('month', registers_date) = date_trunc('month', iter_date) GROUP BY date_trunc('month', registers_date)
+                            ), 0);
+            total_refund:= coalesce((SELECT sum(refund_amt) FROM Cancels WHERE date_trunc('month', cancels_date) = date_trunc('month', iter_date) GROUP BY date_trunc('month', cancels_date)), 0);
+            total_redeemed_course:= coalesce((SELECT count(*) FROM Buys WHERE date_trunc('month', buys_date) = date_trunc('month', iter_date) GROUP BY date_trunc('month', buys_date)), 0)
+                                    - coalesce((SELECT count(*) FROM Cancels WHERE date_trunc('month', cancels_date) = date_trunc('month', iter_date) GROUP BY date_trunc('month', cancels_date)), 0);
+            RETURN NEXT;
+            iter_date:= iter_date - interval '1 month';
+        END LOOP;
+    END;
+$$ LANGUAGE plpgsql;
+	       
+	       
+	       
+	       
+	       
+	       
+	       
+	       
+	       
+	       
+	       
+	       
+	       
