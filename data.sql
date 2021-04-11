@@ -1,3 +1,4 @@
+--DATA:
 INSERT INTO Customers(address, phone, cust_name, email) VALUES ('327 Cottonwood Terrace', '8060000000', 'Nealon OGrady', 'nogrady0@examiner.com');
 INSERT INTO Customers(address, phone, cust_name, email) VALUES ('59 Hooker Court', '3030000000', 'Roldan Gilbanks',  'rgilbanks1@webs.com');
 INSERT INTO Customers(address, phone, cust_name, email) VALUES ('9 Transport Junction',	'2830000000', 'Trula Laverock',	'tlaverock2@weather.com');
@@ -120,8 +121,6 @@ INSERT INTO Course_packages (sale_start_date, sale_end_date, num_free_registrati
 INSERT INTO Course_packages (sale_start_date, sale_end_date, num_free_registrations, package_name,  price) VALUES ('2020-09-01', '2020-10-29', 1, 'Computing 09', 325.00);
 INSERT INTO Course_packages (sale_start_date, sale_end_date, num_free_registrations, package_name,  price) VALUES ('2020-10-01', '2020-11-29', 1, 'Computing 10', 350.00);
 
-
-
 INSERT INTO Rooms VALUES (1, 'COM1', 5);
 INSERT INTO Rooms VALUES (2, 'COM2', 5);
 INSERT INTO Rooms VALUES (3, 'COM3', 5);
@@ -133,10 +132,12 @@ INSERT INTO Rooms VALUES (8, 'COM8', 5);
 INSERT INTO Rooms VALUES (9, 'COM9', 5);
 INSERT INTO Rooms VALUES (10,'COM10', 5);
 
-
 INSERT INTO Offerings VALUES ('2020-12-29', 1, 3, '2021-02-02', '2021-02-23', '2021-01-05', 10, 5, 50.00);
 INSERT INTO Offerings VALUES ('2021-01-26', 2, 3, '2021-03-02', '2021-03-23', '2021-02-02', 10, 5, 100.00);
+--INSERT INTO Offerings VALUES ('2021-01-02', 2, 3, '2021-02-07', '2021-02-28', '2021-01-05', 10, 5, 115.00);
 INSERT INTO Offerings VALUES ('2021-02-26', 3, 3, '2021-04-02', '2021-04-23', '2021-03-05', 10, 5, 75.00);
+INSERT INTO Offerings VALUES ('2021-03-26', 4, 3, '2021-04-30', '2021-05-21', '2021-04-02', 10, 5, 80.00);
+INSERT INTO Offerings VALUES ('2021-03-27', 4, 3, '2021-05-01', '2021-05-22', '2021-04-03', 10, 5, 65.00);
 INSERT INTO Offerings VALUES ('2021-03-28', 4, 3, '2021-05-02', '2021-05-23', '2021-04-04', 10, 5, 100.00);
 INSERT INTO Offerings VALUES ('2021-04-28', 5, 3, '2021-06-02', '2021-06-23', '2021-05-05', 10, 5, 110.00);
 INSERT INTO Offerings VALUES ('2021-05-28', 6, 5, '2021-07-02', '2021-07-23', '2021-06-04', 10, 5, 125.00);
@@ -145,16 +146,13 @@ INSERT INTO Offerings VALUES ('2021-07-29' ,8, 5, '2021-09-02', '2021-09-23', '2
 INSERT INTO Offerings VALUES ('2021-08-28' ,9 ,5, '2021-10-02', '2021-10-23', '2021-09-04', 10, 5, 170.00);
 INSERT INTO Offerings VALUES ('2021-09-28', 10, 5, '2021-11-02', '2021-11-23', '2021-10-05', 10, 5, 175.00);
 
-
 INSERT INTO Sessions VALUES (1, '0900', '1000', '2021-02-09', '2020-12-29', 1, 1, 2);
--- INSERT INTO Sessions VALUES (2, '0930', '1030', '2021-03-09', '2021-01-26', 2, 2, 2);
-INSERT INTO Sessions VALUES (2, '0900', '1000', '2021-03-09', '2021-01-26', 2, 2, 2);
+INSERT INTO Sessions VALUES (2, '0930', '1030', '2021-03-09', '2021-01-26', 2, 2, 2);
 INSERT INTO Sessions VALUES (3, '1000', '1100', '2021-04-09', '2021-02-26', 3, 3, 4);
 INSERT INTO Sessions VALUES (4, '0900', '1000', '2021-06-09', '2021-03-28', 4, 4, 4);
 INSERT INTO Sessions VALUES (5, '1100', '1200', '2021-06-09','2021-04-28', 5, 5, 6);
 INSERT INTO Sessions VALUES (6, '1400', '1500', '2021-07-09', '2021-05-28', 6, 6, 6);
--- INSERT INTO Sessions VALUES (7, '1430', '1530', '2021-08-09', '2021-06-28', 7, 7, 7);
-INSERT INTO Sessions VALUES (7, '1400', '1500', '2021-08-09', '2021-06-28', 7, 7, 7);
+INSERT INTO Sessions VALUES (7, '1430', '1530', '2021-08-09', '2021-06-28', 7, 7, 7);
 INSERT INTO Sessions VALUES (8, '1500', '1600', '2021-09-09', '2021-07-29', 8, 8, 8);
 INSERT INTO Sessions VALUES (9, '1500', '1600', '2021-11-09', '2021-08-28', 9, 9, 10);
 INSERT INTO Sessions VALUES (10, '1700', '1800', '2021-11-09', '2021-09-28', 10, 10, 10);
@@ -162,13 +160,13 @@ INSERT INTO Sessions VALUES (10, '1700', '1800', '2021-11-09', '2021-09-28', 10,
 INSERT INTO Registers VALUES ('2021-01-04', 1, '2020-12-29', '5140164490919192', 1, 1, 1);
 INSERT INTO Registers VALUES ('2021-01-31', 2, '2021-01-26', '5344610134228782', 2, 2, 2);
 INSERT INTO Registers VALUES ('2021-03-01', 3, '2021-02-26', '5234352971639424', 3, 3, 3);
-INSERT INTO Registers VALUES ('2021-05-05', 4, '2021-03-28', '5450736293191055', 4, 4, 4);
-INSERT INTO Registers VALUES ('2021-06-29', 5, '2021-04-28', '5297378218777531', 5, 5, 5);
-INSERT INTO Registers VALUES ('2021-08-02', 6, '2021-05-28', '4929855400823578', 6, 6, 6);
-INSERT INTO Registers VALUES ('2021-09-08', 7, '2021-06-28', '4929952829908583', 7, 7, 7);
-INSERT INTO Registers VALUES ('2021-10-09', 8, '2021-07-29', '4556609775025594', 8, 8, 8);
-INSERT INTO Registers VALUES ('2021-11-03', 9, '2021-08-28', '4716087919245161', 9, 9, 9);
-INSERT INTO Registers VALUES ('2021-12-13', 10, '2021-09-28', '4556779474584066', 10, 10, 10);
+INSERT INTO Registers VALUES ('2021-04-04', 4, '2021-03-28', '5450736293191055', 4, 4, 4);
+INSERT INTO Registers VALUES ('2021-05-02', 5, '2021-04-28', '5297378218777531', 5, 5, 5);
+INSERT INTO Registers VALUES ('2021-06-02', 6, '2021-05-28', '4929855400823578', 6, 6, 6);
+INSERT INTO Registers VALUES ('2021-07-01', 7, '2021-06-28', '4929952829908583', 7, 7, 7);
+INSERT INTO Registers VALUES ('2021-08-03', 8, '2021-07-29', '4556609775025594', 8, 8, 8);
+INSERT INTO Registers VALUES ('2021-09-04', 9, '2021-08-28', '4716087919245161', 9, 9, 9);
+INSERT INTO Registers VALUES ('2021-10-05', 10, '2021-09-28', '4556779474584066', 10, 10, 10);
 
 INSERT INTO Buys VALUES ('2021-01-12',	0, 2, '5140164490919192', 1);
 INSERT INTO Buys VALUES ('2021-02-09',	5, 1, '5344610134228782', 2);
