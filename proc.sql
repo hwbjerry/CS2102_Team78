@@ -772,14 +772,388 @@ $$ LANGUAGE plpgsql;
 -- EXAMPLE:
 -- select * from promote_courses();
 
+-- 1. add_employee:
+DROP PROCEDURE IF EXISTS add_employee(TEXT, TEXT, TEXT, TEXT, NUMERIC, DATE, TEXT, TEXT ARRAY);
+CREATE OR REPLACE PROCEDURE add_employee(ename TEXT, address TEXT, phone TEXT, email TEXT, salary NUMERIC , join_date DATE, employee_category TEXT, course_area TEXT ARRAY)
+AS $$
+DECLARE
+  curr_eid INT;
+  number_course_area integer := array_length(course_area, 1);
+  course_area_index integer := 1;
+BEGIN
+  IF employee_category NOT IN ('administrator', 'manager', 'full time instructor', 'part time instructor') THEN
+       RAISE EXCEPTION 'Category of employee must be one of the following: administrator, manager, full time instructor, part time instructor';
+  END IF;
+
+  INSERT INTO Employees (ename, phone, address, email, join_date)
+VALUES (ename, phone, address, email, join_date)
+  RETURNING eid INTO curr_eid;
+  IF employee_category = 'administrator' THEN
+     INSERT INTO Full_Time_Emp VALUES(curr_eid, salary);
+       WHILE course_area_index <= number_course_area LOOP
+        INSERT INTO Courses_areas VALUES (course_area[course_area_index], curr_eid);
+        course_area_index = course_area_index + 1;
+     END LOOP;
+     INSERT INTO Administrators VALUES (curr_eid);
+  ELSEIF employee_category = 'manager' THEN
+     INSERT INTO Full_Time_Emp VALUES (curr_eid, salary);
+     INSERT INTO Managers VALUES (curr_eid);
+     WHILE course_area_index <= number_course_area LOOP
+        INSERT INTO Courses_areas VALUES (course_area[course_area_index], curr_eid);
+        course_area_index = course_area_index + 1;
+     END LOOP;
+  ELSEIF employee_category = 'full time instructor' THEN
+     INSERT INTO Instructors VALUES (curr_eid);
+     INSERT INTO Full_Time_Emp VALUES (curr_eid, salary);
+     WHILE course_area_index <= number_course_area LOOP
+        INSERT into Specializes VALUES (curr_eid, course_area[course_area_index]);
+        course_area_index = course_area_index + 1;
+     END LOOP;
+  ELSEIF employee_category = 'part time instructor' THEN
+     INSERT into Part_Time_Emp VALUES (curr_eid, salary);
+     WHILE course_area_index <= number_course_area LOOP
+        INSERT into Specializes VALUES (curr_eid, course_area[course_area_index]);
+        course_area_index = course_area_index + 1;
+     END LOOP;
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Testing procedure:
+-- CALL add_employee (
+--   'Administrator_1',
+--   '1 Kent Ridge Drive',
+--   '90901111',
+--   'admin_1@gmail.com',
+--   '3000',
+--   '2021-03-31',
+--   'administrator',
+--   '{}'
+-- );
+--
+-- CALL add_employee (
+-- ‘Manager_1’,
+-- ‘2 Kent Ridge Drive’,
+-- ‘90902222’,
+-- ‘manager_1@gmail.com’,
+-- ‘3000’,
+-- ‘2021-04-30’,
+-- ‘Manager’,
+-- ‘{“Law”}’
+-- );
+--
+--
+-- CALL add_employee (
+-- ‘Instructor_1’,
+-- ‘3 Kent Ridge Drive’,
+-- ‘90903333’,
+-- ‘instructor_1@gmail.com’,
+-- ‘3000’,
+-- ‘2021-03-31’,
+-- ‘{“Computer Science”, “Law”}’
+-- );
+--
+-- CALL add_employee (
+-- ‘NULL’,
+-- ‘2 Kent Ridge Drive’,
+-- ‘90902222’,
+-- ‘manager_1@gmail.com’,
+-- ‘3000’,
+-- ‘2021-04-30’,
+-- ‘Manager’,
+-- ‘{“Law”}’
+-- );
+
+
+-- 3. add_customer:
+DROP PROCEDURE IF EXISTS add_customer(TEXT, TEXT, TEXT, TEXT, INT, DATE, INT);
+CREATE OR REPLACE PROCEDURE add_customer(cust_name TEXT, address TEXT, phone TEXT, email TEXT, credit_card_num INT, expiry_date DATE, CVV INT)
+AS $$
+DECLARE
+	curr_cust_id INT;
+BEGIN
+	INSERT INTO Customers (address, phone, cust_name, email) VALUES (address, phone, cust_name, email) RETURNING cust_id INTO curr_cust_id;
+	INSERT INTO Credit_cards VALUES (credit_card_num, CVV, expiry_date, CURRENT_DATE, curr_cust_id);
+END;
+$$ LANGUAGE plpgsql;
+
+-- Testing data:
+-- call add_customer (
+-- 'Customer1',
+-- 'Blk 1 Green Ridge Road',
+-- '11111111',
+-- 'cust_1@hotmail.com',
+-- '1111111111',
+-- '2025-04-09',
+-- 111
+-- );
+
+
+-- 5. add_course:
+DROP PROCEDURE IF EXISTS add_course(TEXT, TEXT, TEXT, INT);
+CREATE OR REPLACE PROCEDURE add_course(title TEXT, description TEXT, area_name TEXT, duration INT)
+AS $$
+	INSERT INTO Courses(title, duration, description, area_name) VALUES (title, duration, description, area_name);
+$$ LANGUAGE sql;
+
+-- Testing data:
+-- CALL add_course('Additional_course', 'Computing additional course added', 'Computing 01', 4);
+
+
+--9. get_available_rooms:
+DROP FUNCTION IF EXISTS get_available_rooms(start_date DATE, end_date DATE);
+CREATE OR REPLACE FUNCTION get_available_rooms(start_date DATE, end_date DATE)
+RETURNS TABLE (rid INT, seating_capacity INT, in_day DATE, range_available_hours INT[]) AS $$
+DECLARE
+  hours_arr INT[];
+  curr_hour INT;
+  record_room RECORD;
+  record_day RECORD;
+loop_count INT;
+curs_room CURSOR FOR (SELECT * FROM Rooms ORDER BY rid);
+curs_day CURSOR FOR (SELECT d.as_of_date::DATE FROM GENERATE_SERIES(start_date -  '1 day '::INTERVAL, end_date,  '1 day '::INTERVAL) d (as_of_date));
+
+BEGIN
+  OPEN curs_room;
+     OPEN curs_day;
+	LOOP
+		FETCH curs_room INTO record_room;
+		EXIT WHEN NOT FOUND;
+		rid := record_room.rid;
+		seating_capacity := record_room.seating_capacity;
+		MOVE FIRST FROM curs_day;
+		LOOP
+			FETCH curs_day INTO record_day;
+			EXIT WHEN NOT FOUND;
+			in_day := record_day.as_of_date::DATE;
+			hours_arr := array[9,10,11,14,15,16,17];
+			loop_count := 7;
+			LOOP
+				curr_hour := hours_arr[loop_count];
+				IF EXISTS (
+				       SELECT 1
+				       FROM Sessions
+				       WHERE Sessions.session_date = in_day
+				       AND Sessions.rid = record_room.rid
+				       AND ((curr_hour =date_part('hour',Sessions.start_time)) OR (curr_hour < date_part('hour',Sessions.start_time) AND date_part('hour',Sessions.start_time) < curr_hour + 1) OR (date_part('hour',Sessions.start_time) < curr_hour AND curr_hour < date_part('hour',Sessions.end_time)))
+				   )
+				   THEN
+						SELECT array_remove(hours_arr, curr_hour) INTO hours_arr;
+				END IF;
+			    loop_count := loop_count - 1;
+				EXIT WHEN loop_count = 0;
+			END LOOP;
+			range_available_hours := hours_arr;
+			RETURN NEXT;
+		END LOOP;
+	END LOOP;
+   CLOSE curs_room;
+   CLOSE curs_day;
+END;
+$$ LANGUAGE plpgsql;
+
+-- This will return all rooms free except rid = 1 as there is a session at 0900.
+-- Testing data:
+-- SELECT * FROM get_available_rooms (
+-- '2021-02-09',
+-- '2021-02-10'
+-- );
+
+
+-- 11. add_course_package:
+DROP PROCEDURE IF EXISTS add_course_package(TEXT, INT, DATE, DATE, NUMERIC);
+CREATE OR REPLACE PROCEDURE add_course_package( package_name TEXT, num_free_registrations INT, sale_start_date DATE, sale_end_date DATE, price NUMERIC)
+AS $$
+	INSERT into Course_packages (sale_start_date, sale_end_date, num_free_registrations, package_name, price)  VALUES (sale_start_date, sale_end_date, num_free_registrations, package_name, price);
+$$ LANGUAGE sql;
+
+-- Testing data:
+-- CALL add_course_package( 'add_course_packaging_packageName', 1 , '2020-01-01', '2020-02-29', 200.00);
+
+
+-- 13. buy_course_package:
+DROP PROCEDURE IF EXISTS buy_course_package(INT, INT);
+CREATE OR REPLACE PROCEDURE buy_course_package (cid INT, pid INT)
+AS $$
+DECLARE
+	num_remaining_redemptions INT;
+	credit_card_num TEXT;
+BEGIN
+	IF cid NOT IN (SELECT Customers.cust_id FROM Customers) THEN
+	RAISE EXCEPTION 'Customer ID is not correct. Enter another valid customer_id. ';
+	END IF;
+	IF pid NOT IN (SELECT Course_packages.package_id FROM Course_packages) THEN
+	RAISE EXCEPTION 'Package ID is not correct. Enter another valid package_id.';
+	END IF;
+	SELECT num_free_registrations FROM Course_packages where Course_packages.package_id = pid INTO num_remaining_redemptions;
+	SELECT credit_card_number from Credit_cards WHERE Credit_cards.cust_id = cid ORDER BY Credit_cards.from_date DESC LIMIT 1 INTO credit_card_num;
+	INSERT INTO Buys VALUES (CURRENT_DATE, num_remaining_redemptions, pid, credit_card_num, cid);
+END;
+$$ LANGUAGE plpgsql;
+
+-- Testing data:
+-- call add_customer (
+-- ‘Customer1’,
+-- ‘Blk 1 Green Ridge Road’,
+-- ‘11111111’,
+-- ‘cust_1@hotmail.com’,
+-- ‘1111111111’,
+-- ‘2025-04-09’,
+-- 111
+-- );
+--
+-- INSERT INTO Course_packages (sale_start_date, sale_end_date, num_free_registrations, package_name,  price) VALUES ('2021-04-01', '2021-05-29', 5, 'Computing 04', 200.00);
+--
+-- CALL buy_course_package(11, 11);
+
+
+-- 14. get_my_course_package:
+DROP FUNCTION IF EXISTS get_my_course_package (cid INT);
+CREATE OR REPLACE FUNCTION get_my_course_package (cid INT)
+RETURNS json AS $$
+DECLARE
+ result JSON;
+ buy_date DATE;
+ packageId INT;
+ credit_card_num TEXT;
+ remaining_redemptions INT;
+ Cust_has_package INT := 0;
+BEGIN
+ IF NOT EXISTS (SELECT 1 FROM Customers WHERE Customers.cust_id = cid) THEN
+ RAISE EXCEPTION 'Customer ID is not correct. Enter another valid customer_id.';
+ END IF;
+
+IF EXISTS (SELECT 1 FROM Buys NATURAL JOIN Credit_cards WHERE cust_id = cid) THEN
+ SELECT buys_date, package_id, credit_card_number, num_remaining_redemptions INTO buy_date, packageId, credit_card_num, remaining_redemptions
+ FROM Buys NATURAL JOIN Credit_cards WHERE cust_id = cid
+ ORDER BY buys_date DESC LIMIT 1;
+
+ IF remaining_redemptions = 0 THEN
+    IF EXISTS (
+       SELECT 1 FROM Redeems r
+       WHERE r.credit_card_number = credit_card_num AND r.package_id = packageId AND r.buys_date = buy_date
+       AND EXISTS (SELECT 1 FROM Sessions s WHERE s.course_id = r.course_id AND s.launch_date = r.launch_date AND s.sid = r.sid AND CURRENT_DATE <= s.session_date - 7)) THEN
+       Cust_has_package := 1;
+    END IF;
+ ELSE
+    Cust_has_package := 1;
+ END IF;
+END IF;
+
+IF Cust_has_package = 1 THEN
+ WITH cancels_num AS (
+    SELECT count(*) AS count1, course_id, launch_date, sid
+    FROM Cancels
+    WHERE cust_id = cid
+    GROUP BY course_id, launch_date, sid
+ ), redeems_num AS (
+ SELECT count(*) AS count2, course_id, launch_date, sid
+ FROM Redeems
+ WHERE package_id = packageId AND credit_card_number = credit_card_num AND buys_date = buy_date
+ GROUP BY course_id, launch_date, sid
+), Sessions_redeemed AS (
+ SELECT s.course_id, s.launch_date, s.sid, c.title, s.session_date, s.start_time
+ FROM Courses c, Sessions s, Redeems r
+ WHERE r.package_id = packageId AND r.credit_card_number = credit_card_num AND r.buys_date = buy_date AND c.course_id = s.course_id
+   AND s.course_id = r.course_id AND s.sid = r.sid AND s.launch_date = r.launch_date
+ )
+
+SELECT row_to_json(info) INTO result
+FROM (
+ SELECT package_name, buys_date, price, num_free_registrations, num_remaining_redemptions,
+   (SELECT json_agg(Sessions) FROM (SELECT Sessions_redeemed.title, Sessions_redeemed.session_date, Sessions_redeemed.start_time FROM Sessions_redeemed NATURAL LEFT OUTER JOIN cancels_num NATURAL LEFT JOIN redeems_num WHERE COALESCE(count2, 0) - COALESCE(count1, 0) = 1 ORDER BY Sessions_redeemed.session_date, Sessions_redeemed.start_time) Sessions) AS Sessions_redeemed
+   FROM Course_packages NATURAL JOIN Buys
+   WHERE package_id = packageId AND buys_date = buy_date AND credit_card_number = credit_card_num
+   ) info;
+END IF;
+
+RETURN result;
+
+END;
+$$ LANGUAGE plpgsql;
+
+-- Testing data:
+-- SELECT * FROM get_my_course_package(1);
+-- will return nothing since the cust_id 1 has no more num_remaining_redemptions
+--
+-- SELECT * FROM get_my_course_packages(2);
 
 
 
--- DROP FUNCTION IF EXISTS template(in_course_id INT, start_date DATE, end_date DATE);
--- CREATE OR REPLACE FUNCTION template(in_course_id INT, start_date DATE, end_date DATE)
--- RETURNS TABLE (eid INT, name TEXT, total_hour INT, free_date DATE, free_hours INT[]) 
--- AS $$
--- 	DECLARE
--- 	BEGIN
--- 	END
--- $$ LANGUAGE plpgsql;
+-- 19. update_course_session:
+DROP PROCEDURE IF EXISTS update_course_session(INT, INT, INT);
+CREATE OR REPLACE PROCEDURE update_course_session (custId INT, courseId INT, new_sid INT)
+AS $$
+DECLARE
+   num_students_within_a_session INT;
+   cancel_count INT;
+   c1 INT;
+   c2 INT;
+   c3 INT;
+   c4 INT;
+   c5 INT;
+   c6 INT;
+
+BEGIN
+IF NOT EXISTS (SELECT * FROM Sessions s WHERE s.sid=new_sid) THEN
+RAISE EXCEPTION 'Session not valid.';
+
+
+ ELSE
+       SELECT COALESCE(count(*), 0) INTO c1
+       FROM Redeems
+       WHERE Redeems.course_id = courseId AND Redeems.sid = new_sid
+       ;
+       SELECT COALESCE(count(*), 0) INTO c2
+       FROM Registers
+       WHERE Registers.course_id = courseId AND Registers.sid = new_sid
+       ;
+       SELECT COALESCE(count(*), 0) INTO c3
+       FROM Cancels
+       WHERE Cancels.course_id = courseId AND Cancels.sid = new_sid
+       ;
+
+       num_students_within_a_session = c1 + c2 + c3;
+
+       SELECT COALESCE(count(*), 0) INTO c4
+       FROM Redeems
+       WHERE Redeems.course_id = courseId
+       AND Redeems.credit_card_number IN
+           (SELECT credit_card_number FROM Credit_cards where Credit_cards.cust_id = custId);
+
+       SELECT COALESCE(count(*), 0) INTO c5
+       FROM Registers
+       WHERE Registers.course_id = courseId
+       AND Registers.credit_card_number IN
+           (SELECT credit_card_number FROM Credit_cards where Credit_cards.cust_id = custId);
+
+       SELECT COALESCE(count(*), 0) INTO c6
+       FROM Cancels
+       WHERE Cancels.course_id = courseId
+       AND Cancels.cust_id = custId;
+
+       cancel_count = c4 + c5 + c6;
+       IF (cancel_count = 0) THEN
+       RAISE EXCEPTION 'Customer is not registered in session';
+
+       ELSIF (num_students_within_a_session+1 > (SELECT seating_capacity FROM (Rooms NATURAL JOIN Sessions) WHERE Rooms.rid = Sessions.rid GROUP BY Rooms.rid LIMIT 1)) THEN
+       RAISE EXCEPTION 'Session does not have enough seats.';
+
+       ELSIF EXISTS (SELECT * FROM Registers WHERE Registers.course_id = courseId AND (Registers.credit_card_number IN (SELECT credit_card_number FROM Credit_cards where Credit_cards.cust_id = custId))) THEN
+           UPDATE Registers r
+           SET sid = new_sid
+           WHERE r.course_id = courseId
+           AND r.credit_card_number IN (SELECT credit_card_number FROM Credit_cards where Credit_cards.cust_id = custId);
+
+       ELSE
+           UPDATE Redeems
+           SET sid = new_sid
+           WHERE Redeems.course_id = courseId
+           AND Redeems.credit_card_number IN (SELECT credit_card_number FROM Credit_cards where Credit_cards.cust_id = custId);
+       END IF;
+   END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Testing data:
+-- CALL update_course_session(10, 10, 9);
