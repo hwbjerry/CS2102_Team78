@@ -30,4 +30,37 @@ BEGIN
    END IF;
 END;
 $$ LANGUAGE plpgsql;
+                                                                                                        
+--24
+--This routine is used to add a new session to a course offering. The inputs to the routine include the following: course offering identifier, new session number, new session day, new session start hour, instructor identifier for new session, and room identifier for new session.
+--If the course offering’s registration deadline has not passed and the the addition request is valid, the routine will process the request with the necessary updates.
+   --SELECT duration
+   --INTO sessionDuration
+   --FROM Courses
+   --WHERE course_id = course_offering_id;
+DROP PROCEDURE IF EXISTS add_session;
+CREATE OR REPLACE PROCEDURE add_session(course_offering_id INTEGER, launchDate DATE, new_session_number INTEGER, new_session_day DATE, new_session_start_hour TIME, instructor_id INTEGER, room_id INTEGER) AS $$
+DECLARE
+ sessionDuration INTEGER;
+ regDeadline DATE;
+BEGIN
+   SELECT registration_deadline
+   INTO regDeadline
+   FROM Offerings
+   WHERE course_id = course_offering_id AND launch_date = launchDate;
+   IF NOT EXISTS (SELECT * FROM Offerings WHERE course_id  = course_offering_id AND launch_date = launchDate) THEN
+     RAISE EXCEPTION 'Cannot add new session because the course offering does not exist';
+   ELSIF (CURRENT_DATE > regDeadline) THEN
+     RAISE EXCEPTION 'The registration deadline for course offering has already passed';
+   ELSIF (room_id NOT IN (SElECT * FROM find_rooms(new_session_day, new_session_start_hour, interval '1 hour'))) THEN
+     RAISE EXCEPTION 'Room is not available';
+   ELSE
+     INSERT INTO Sessions
+     VALUES (new_session_number, new_session_start_hour, (new_session_start_hour + interval '1 hour'), new_session_day, launchDate, course_offering_id, room_id, instructor_id);
+   END IF;
+END;
+$$LANGUAGE plpgsql;
+                                                                                                        
+                                                                                                        
+                                                                                                        
 
