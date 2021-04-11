@@ -5,7 +5,6 @@ DROP TABLE IF EXISTS Sessions CASCADE;
 DROP TABLE IF EXISTS Offerings CASCADE;
 DROP TABLE IF EXISTS Courses CASCADE;
 DROP TABLE IF EXISTS Rooms CASCADE;
---DROP TABLE IF EXISTS Owns CASCADE;
 DROP TABLE IF EXISTS Registers CASCADE;
 DROP TABLE IF EXISTS Buys CASCADE;
 DROP TABLE IF EXISTS Redeems CASCADE;
@@ -14,13 +13,14 @@ DROP TABLE IF EXISTS Specializes CASCADE;
 DROP TABLE IF EXISTS Course_areas CASCADE;
 DROP TABLE IF EXISTS Pay_slips CASCADE;
 DROP TABLE IF EXISTS Employees CASCADE;
-DROP TABLE IF EXISTS Part_time_Emp CASCADE;
-DROP TABLE IF EXISTS Full_time_Emp CASCADE;
+DROP TABLE IF EXISTS Part_Time_Emp CASCADE;
+DROP TABLE IF EXISTS Full_Time_Emp CASCADE;
 DROP TABLE IF EXISTS Instructors CASCADE;
-DROP TABLE IF EXISTS Part_time_instructors CASCADE;
-DROP TABLE IF EXISTS Full_time_instructors CASCADE;
+DROP TABLE IF EXISTS Part_Time_Instructors CASCADE;
+DROP TABLE IF EXISTS Full_Time_Instructors CASCADE;
 DROP TABLE IF EXISTS Managers CASCADE;
 DROP TABLE IF EXISTS Administrators CASCADE;
+
 
 CREATE TABLE Customers (
 	cust_id  SERIAL PRIMARY KEY,
@@ -36,21 +36,12 @@ CREATE TABLE Credit_cards (
 	credit_card_number TEXT,
 	CVV INTEGER NOT NULL, 
 	expiry_date DATE NOT NULL,
-from_date DATE NOT NULL,
+    	from_date DATE NOT NULL,
   	cust_id INTEGER NOT NULL,
 	foreign key (cust_id) REFERENCES Customers(cust_id),
 	primary key (credit_card_number),
 	UNIQUE(credit_card_number, cust_id)
 );
-
--- CREATE TABLE Owns (
--- 	from_date DATE NOT NULL,
---   	cust_id INTEGER NOT NULL,
---   	credit_card_number TEXT,
--- 	foreign key (cust_id) REFERENCES Customers(cust_id),
--- 	foreign key (credit_card_number) REFERENCES Credit_cards(credit_card_number),
--- 	primary key (credit_card_number, cust_id)
--- );
 
 CREATE TABLE Course_packages (
 	package_id SERIAL PRIMARY KEY,
@@ -62,8 +53,8 @@ CREATE TABLE Course_packages (
 	CHECK (
 		sale_start_date <= sale_end_date
 		and
-	num_free_registrations >= 0
-)
+		num_free_registrations >= 0
+	)
 );
 
 CREATE TABLE Rooms (
@@ -123,7 +114,6 @@ CREATE TABLE Course_areas (
 	foreign key(eid) references Managers(eid) 
 );
 
-
 CREATE TABLE Courses (
 	course_id SERIAL PRIMARY KEY,
 	title TEXT NOT NULL,
@@ -133,8 +123,6 @@ CREATE TABLE Courses (
 	foreign key (area_name) REFERENCES Course_areas(area_name), 
 	UNIQUE(title)
 );
-
-
 
 -- integrate with Handles lecture ER page 44
 -- integrate with Has
@@ -172,18 +160,18 @@ CREATE TABLE Sessions (
 	rid INTEGER NOT NULL,
 	conduct_by INT NOT NULL,
 	primary key (sid, launch_date, course_id, rid),
-	foreign key (rid) REFERENCES Rooms(rid),
+	foreign key (rid) REFERENCES ‘’1(rid),
 	foreign key (launch_date, course_id) REFERENCES Offerings(launch_date, course_id) on delete cascade,
 	foreign key (conduct_by) REFERENCES Instructors(eid),
 	CHECK (
 		((start_time >= TIME '0900' and end_time <= TIME '1200')
 		or
-(start_time >= TIME '1400' and end_time <= TIME '1800')) 
-and 
-start_time < end_time
-and 
-date_part('dow', session_date) in (1, 2, 3, 4, 5)
-)
+		(start_time >= TIME '1400' and end_time <= TIME '1800')) 
+		and 
+		start_time < end_time
+		and 
+		date_part('dow', session_date) in (1, 2, 3, 4, 5)
+	)
 
 );
 
@@ -196,7 +184,7 @@ CREATE TABLE Registers (
 	course_id INTEGER NOT NULL,
 	rid INTEGER NOT NULL,
 	primary key (registers_date, sid, credit_card_number, cust_id),
-	foreign key (sid, launch_date, course_id, rid) references Sessions (sid, launch_date, course_id, rid),
+	foreign key (sid, launch_date, course_id, rid) references Sessions (sid, launch_date, course_id, rid) ON UPDATE CASCADE ON DELETE CASCADE,
 	foreign key (credit_card_number, cust_id) references Credit_cards(credit_card_number, cust_id)
 );
 
@@ -214,10 +202,8 @@ CREATE TABLE Buys (
 	)
 );
 
-
 CREATE TABLE Redeems (
 	redeems_date DATE DEFAULT CURRENT_DATE,
-	
 	sid INTEGER,
 	launch_date DATE,
 	course_id INTEGER,
@@ -227,7 +213,7 @@ package_id INTEGER,
 credit_card_number TEXT,
 	cust_id INTEGER,
 	foreign key (buys_date, credit_card_number, package_id, cust_id) REFERENCES Buys(buys_date, credit_card_number, package_id, cust_id), 
-	foreign key (sid, launch_date, course_id, rid) REFERENCES Sessions(sid, launch_date, course_id, rid),
+	foreign key (sid, launch_date, course_id, rid) REFERENCES Sessions(sid, launch_date, course_id, rid) ON UPDATE CASCADE ON DELETE CASCADE,
 	primary key (redeems_date, buys_date, credit_card_number, package_id, sid, launch_date, course_id),
 	CHECK (
 		redeems_date >= buys_date
@@ -237,14 +223,14 @@ credit_card_number TEXT,
 CREATE TABLE Cancels (
 	cancels_date DATE DEFAULT CURRENT_DATE,
 	cust_id INTEGER NOT NULL,
-sid INTEGER NOT NULL,	
+	sid INTEGER NOT NULL,	
 	launch_date DATE NOT NULL,
 	course_id INTEGER NOT NULL,
 	rid INTEGER,
-refund_amt NUMERIC,
+	refund_amt NUMERIC,
 	package_credit INTEGER,
 	check(package_credit >= 0),
-	foreign key (sid, launch_date, course_id, rid) REFERENCES Sessions(sid, launch_date, course_id, rid),
+	foreign key (sid, launch_date, course_id, rid) REFERENCES Sessions(sid, launch_date, course_id, rid) ON UPDATE CASCADE ON DELETE CASCADE,
 	foreign key (cust_id) REFERENCES Customers(cust_id),
 	primary key (cancels_date, cust_id, sid, launch_date, course_id),
 	CHECK (
@@ -270,28 +256,9 @@ CREATE TABLE Pay_slips (
 	foreign key (eid) references Employees(eid) ON DELETE CASCADE
 );
 
+
 -- Triggers
-
--- Customer must have a credit to be able to purchase the packages 
-CREATE OR REPLACE FUNCTION check_own_credit_card() 
-RETURNS TRIGGER 
-AS $$
-	BEGIN 
-		IF ((SELECT COUNT(credit_card_number) FROM Credit_cards WHERE cust_id = NEW.cust_id) = 0) 
-THEN RAISE EXCEPTION 'Each customer is required to own at least one credit credit';
-			RETURN NULL;
-		END IF;
-		RETURN NEW;
-	END;
-$$ LANGUAGE plpgsql;
-
-CREATE CONSTRAINT TRIGGER check_if_own_credit_card
-AFTER UPDATE OR INSERT ON Customers
-DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW EXECUTE FUNCTION check_own_credit_card();
-
-
--- Each employee can only be one of the following: manager, instructor, administrator
+-- 1. Each employee can only be one of the following: manager, instructor, administrator
 CREATE OR REPLACE FUNCTION check_employee_only_one_role() RETURNS TRIGGER
 AS $$
 	DECLARE 
@@ -304,7 +271,7 @@ Num_administrators := (SELECT 1 FROM Administrators WHERE Administrators.eid = N
 Num_instructors := (SELECT 1 FROM Instructors WHERE Instructors.eid = NEW.eid);
 
  IF (Num_managers + Num_administrators + Num_instructors > 1) 
-THEN RAISE EXCEPTION 'Employee is assigned to multiple roles. Each employee should only be assigned to one of the three roles (ie manager, instructor or administrator) ';
+THEN RAISE EXCEPTION 'Employee % is assigned to multiple roles. Each employee should only be assigned to one of the three roles (ie manager, instructor or administrator) ', NEW.eid;
 	RETURN NULL;
 END IF;
 RETURN NEW;
@@ -317,17 +284,16 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE PROCEDURE check_employee_only_one_role();
 
 
-
--- If employee with role departs company (checked)
+-- 2. If employee with role departs company (checked)
 CREATE OR REPLACE FUNCTION check_departing_employee_role_func() RETURNS TRIGGER
 AS $$
 BEGIN
 		IF EXISTS (SELECT 1 FROM Offerings WHERE Offerings.eid = NEW.eid AND Offerings.registration_deadline > NEW.depart_date) THEN
-		RAISE EXCEPTION 'Employee is already assigned to offering';
+		RAISE EXCEPTION 'Employee % is already assigned to offering', NEW.eid;
 		ELSIF EXISTS (SELECT 1 FROM Sessions WHERE Sessions.conduct_by = NEW.eid AND New.depart_date < Sessions.session_date) THEN
-		RAISE EXCEPTION 'Employee is already assigned to offering';
+		RAISE EXCEPTION 'Employee % is already assigned to offering', NEW.eid;
 		ELSIF EXISTS (SELECT 1 FROM Course_areas WHERE Course_areas.eid = NEW.eid) THEN
-		RAISE EXCEPTION  'Employee is already assigned to course area';
+		RAISE EXCEPTION  'Employee % is already assigned to course area', NEW.eid;
 		ELSE RETURN NEW;
 		END IF;
 		RETURN NULL;
@@ -339,12 +305,12 @@ AFTER INSERT OR UPDATE OR DELETE ON Employees
 FOR EACH ROW EXECUTE FUNCTION check_departing_employee_role_func();
 
 
--- Ensures that all managers and administrators are full time employees 
+-- 3. Ensures that all managers and administrators are full time employees 
 CREATE OR REPLACE FUNCTION check_if_full_time() RETURNS TRIGGER 
 AS $$ 
 BEGIN 
-IF NOT EXISTS(SELECT Full_TIme_Emp.eid FROM Full_Time_Emp WHERE Full_Time_Emp.eid = NEW.eid)
-THEN RAISE EXCEPTION  'Employee who are either administrators or managers needs to be full time. ';
+IF NOT EXISTS(SELECT Full_Time_Emp.eid FROM Full_Time_Emp WHERE Full_Time_Emp.eid = NEW.eid)
+THEN RAISE EXCEPTION  'Employee % who is either administrators or managers needs to be full time.', NEW.eid;
 RETURN NULL;
 END IF;
 RETURN NEW;
@@ -359,6 +325,8 @@ CREATE CONSTRAINT TRIGGER check_if_administrator_full_time
 AFTER INSERT ON Administrators
 FOR EACH ROW EXECUTE FUNCTION check_if_full_time();
 
+
+-- 4. Each employee can only be either part time or full time and not both
 CREATE OR REPLACE FUNCTION check_part_time_full_time_func() RETURNS TRIGGER
 AS $$
 DECLARE
@@ -384,25 +352,24 @@ CREATE CONSTRAINT TRIGGER check_part_time_full_time_trigger
 AFTER INSERT ON Employees
 FOR EACH ROW EXECUTE FUNCTION check_part_time_full_time_func();
 
--- checks if instructor assigned is specialized in course area and if still works for the company
+
+-- 5. checks if instructor assigned is specialized in course area and if still works for the company
 CREATE OR REPLACE FUNCTION check_session_instructor_func() RETURNS TRIGGER
 AS $$
 DECLARE
 	course_area TEXT;
-	departed BOOLEAN;
+	is_departing BOOLEAN;
 	depart_date DATE;
 BEGIN
-	depart_date := (SELECT depart_date FROM Employees WHERE Employees.eid = NEW.eid);
-	departed := depart_date IS NOT NULL;
-	IF departed THEN 
-		RAISE EXCEPTION 'Employee is not longer working for the company';
-	END IF;
+	depart_date := (SELECT Employees.depart_date FROM Employees WHERE Employees.eid = NEW.conduct_by);
+	is_departing := depart_date IS NOT NULL;
+	
 	course_area := (SELECT area_name FROM Courses WHERE Courses.course_id = NEW.course_id);
 
 	IF NOT EXISTS (SELECT 1 FROM Specializes WHERE Specializes.area_name = course_area AND Specializes.eid = NEW.conduct_by) THEN
-		RAISE EXCEPTION 'Employee is not specialized in % unable to conduct Session % for % with %', course_area, NEW.sid, NEW.course_id, NEW.launch_date;
-	ELSIF (depart_date < NEW.session_date) THEN
-		RAISE EXCEPTION 'Employee is departing the company before Session % for % with %', NEW.sid, NEW.course_id, NEW.launch_date;
+		RAISE EXCEPTION 'Employee % is not specialized in % unable to conduct Session % for % with %', NEW.conduct_by , course_area, NEW.sid, NEW.course_id, NEW.launch_date;
+	ELSIF (is_departing AND depart_date < NEW.session_date) THEN
+		RAISE EXCEPTION 'Employee % is departing the company before Session % for % with %', NEW.conduct_by, NEW.sid, NEW.course_id, NEW.launch_date;
 	END IF;
 	RETURN NULL;
 END
@@ -414,10 +381,7 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION check_session_instructor_func();
 
 
-
-
-
--- Ensures that each instructor should specialize in at least one area
+-- 6. Ensures that each instructor should specialize in at least one area
 CREATE OR REPLACE FUNCTION check_instructor_specialize() RETURNS TRIGGER
 AS $$
 	BEGIN 
@@ -433,7 +397,9 @@ CREATE TRIGGER check_instructor_specializtion
 AFTER INSERT ON Specializes
 FOR EACH ROW EXECUTE FUNCTION check_instructor_specialize();
 
-CREATE OR REPLACE FUNCTION	check_part_time_instructor_weekly_hours_func() RETURNS TRIGGER
+
+-- 7. Ensure that part time instructors does not teach more than 30 hours 
+CREATE OR REPLACE FUNCTION check_part_time_instructor_weekly_hours_func() RETURNS TRIGGER
 AS $$
 	DECLARE
 		weekly_hours_worked FLOAT;
@@ -443,7 +409,8 @@ AS $$
 			FROM Sessions
 			WHERE date_part('month', Sessions.session_date) = date_part('month', NEW.session_date)
 			AND Sessions.conduct_by = NEW.conduct_by
-			))/60;
+			))/60/60;
+		-- RAISE NOTICE '%', weekly_hours_worked;
 		IF EXISTS (
 			SELECT 1 
 			FROM Part_Time_Instructors 
@@ -459,12 +426,16 @@ CREATE TRIGGER check_part_time_instructor_weekly_hours_trigger
 AFTER INSERT OR UPDATE ON Sessions	
 FOR EACH ROW EXECUTE FUNCTION check_part_time_instructor_weekly_hours_func();
 
-CREATE OR REPLACE FUNCTION	check_interval_between_sessions_for_instructor_func() RETURNS TRIGGER
+			
+-- 8. An employee cannot be teaching two classes in the same period and during rest time
+CREATE OR REPLACE FUNCTION check_interval_between_sessions_for_instructor_func() RETURNS TRIGGER
 AS $$
 	BEGIN
 		IF EXISTS(
 			SELECT 1 FROM Sessions
 			WHERE 
+			(Sessions.session_date = NEW.session_date)
+			AND
 			((Sessions.start_time = NEW.start_time OR Sessions.start_time = NEW.end_time OR Sessions.end_time = NEW.start_time OR Sessions.end_time = NEW.end_time) 
 			OR
 			(Sessions.start_time < NEW.start_time AND Sessions.end_time + interval '1 hour' > NEW.start_time)
@@ -479,10 +450,13 @@ AS $$
 	END
 $$ LANGUAGE plpgsql;
 
+
 CREATE TRIGGER check_interval_between_sessions_for_instructor_trigger
 AFTER INSERT OR UPDATE ON Sessions	
 FOR EACH ROW EXECUTE FUNCTION check_interval_between_sessions_for_instructor_func() ;
 
+			
+-- 9. Ensure cancellation policy is enforced
 CREATE OR REPLACE FUNCTION check_cancellation_policy_func() RETURNS TRIGGER
 AS $$
 	DECLARE 
@@ -512,9 +486,9 @@ AS $$
         	END IF;
         -- Within window: refund	
         ELSE 
-        	IF (NEW.refund_amt IS NOT NULL AND NEW.refund_amt <> (fee * 0.9)) THEN
+        	IF (NEW.refund_amt IS NOT NULL AND NEW.refund_amt <> (session_fees * 0.9)) THEN
                 RAISE EXCEPTION 'Refund amount is not 90 percent of the fees paid. 
-                Refund amount (%), Correct amount (%)', NEW.refund_amt, fee * 0.9;
+                Refund amount (%), Correct amount (%)', NEW.refund_amt, session_fees * 0.9;
             ELSIF (NEW.package_credit IS NOT NULL AND NEW.package_credit <> 1) THEN
                 RAISE EXCEPTION 'Package credit is invalid (%)', NEW.package_credit;
             END IF;
@@ -527,7 +501,9 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER check_cancellation_policy_trigger
 AFTER INSERT OR UPDATE ON Cancels	
 FOR EACH ROW EXECUTE FUNCTION check_cancellation_policy_func();
--- Prevent deletion of an offering that has session
+
+								      
+-- 10. Prevent deletion of an offering that has session
 CREATE OR REPLACE FUNCTION check_offering_is_assigned_func()
 RETURNS TRIGGER AS $$
     DECLARE
@@ -543,3 +519,53 @@ CREATE CONSTRAINT TRIGGER check_offering_is_assigned_trigger
 AFTER DELETE ON Offerings
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION check_offering_is_assigned_func();
+
+											  
+-- 11. Each customer can have at most one active or partially active package.
+CREATE OR REPLACE FUNCTION check_all_active_packages_func() RETURNS TRIGGER
+AS $$
+DECLARE
+	registration_left INT;
+	p_id INT;
+	buy_date DATE;
+	card_no TEXT;
+	redeem_date DATE;
+	session_date DATE;
+	window_date DATE;
+
+	s_id INT;
+	l_date DATE;
+	c_id INT;
+	r_id INT;
+BEGIN
+	IF EXISTS (SELECT 1 FROM Buys WHERE Buys.cust_id = NEW.cust_id) THEN
+		SELECT num_remaining_redemptions, package_id, buys_date, credit_card_number INTO registration_left, p_id, buy_date, card_no
+		FROM Buys WHERE Buys.cust_id = NEW.cust_id
+		ORDER BY num_remaining_redemptions desc
+		LIMIT 1;
+
+		IF (registration_left > 0) THEN
+			RAISE EXCEPTION 'Course Package is still active';
+		ELSE
+			SELECT sid, launch_date, course_id, rid INTO s_id, l_date, c_id, r_id
+			FROM Redeems 
+			WHERE Redeems.cust_id = NEW.cust_id AND Redeems.package_id = p_id AND Redeems.buys_date = buy_date AND Redeems.credit_card_number = card_no;
+			
+			session_date := (SELECT Sessions.session_date FROM Sessions 
+			WHERE Sessions.sid = s_id AND Sessions.launch_date = l_date AND Sessions.course_id = c_id AND Sessions.rid = r_id);
+			window_date := session_date - interval '7 day';
+			IF (NEW.buys_date < window_date) THEN
+				RAISE EXCEPTION 'Redeemed session % still within cancellation period(%) for full credit refund', s_id, window_date;
+			END IF;
+		END IF;
+	ELSE
+		-- RAISE NOTICE 'Customer % has no active buys', NEW.cust_id;
+		RETURN NEW;
+	END IF;
+	RETURN NULL;
+END
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER check_all_active_packages_trigger
+BEFORE INSERT OR UPDATE ON Buys	
+FOR EACH ROW EXECUTE FUNCTION check_all_active_packages_func();
